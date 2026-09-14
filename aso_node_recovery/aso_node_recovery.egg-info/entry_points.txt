@@ -1,0 +1,2 @@
+[console_scripts]
+aso-recovery = aso_node_recovery.main:main
