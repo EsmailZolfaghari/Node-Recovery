@@ -5,7 +5,7 @@ API Documentation: https://www.linode.com/docs/api/
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -17,6 +17,7 @@ from aso_node_recovery.providers.base import (
     NotFoundError,
     ProviderConfig,
     ProviderError,
+    RateLimitError,
     ValidationError,
 )
 
@@ -128,6 +129,12 @@ class LinodeProvider(BaseProvider):
             elif response.status_code == 400:
                 error_data = response.json()
                 raise ValidationError(f"Invalid request: {error_data.get('errors', [])}")
+            elif response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                raise RateLimitError(
+                    "Linode API rate limit exceeded",
+                    retry_after=int(retry_after) if retry_after else None,
+                )
             elif response.status_code >= 400:
                 raise ProviderError(f"Failed to create Linode: {response.status_code}")
 
@@ -160,6 +167,12 @@ class LinodeProvider(BaseProvider):
                 raise NotFoundError(f"Linode {vps_id} not found")
             elif response.status_code == 401:
                 raise AuthenticationError("Invalid Linode API key")
+            elif response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                raise RateLimitError(
+                    "Linode API rate limit exceeded",
+                    retry_after=int(retry_after) if retry_after else None,
+                )
             elif response.status_code >= 400:
                 raise ProviderError(f"Failed to get Linode: {response.status_code}")
 
@@ -192,6 +205,12 @@ class LinodeProvider(BaseProvider):
                 raise NotFoundError(f"Linode {vps_id} not found")
             elif response.status_code == 401:
                 raise AuthenticationError("Invalid Linode API key")
+            elif response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                raise RateLimitError(
+                    "Linode API rate limit exceeded",
+                    retry_after=int(retry_after) if retry_after else None,
+                )
             elif response.status_code >= 400:
                 raise ProviderError(f"Failed to delete Linode: {response.status_code}")
 

@@ -5,7 +5,7 @@ API Documentation: https://docs.hetzner.cloud/
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -121,6 +121,12 @@ class HetznerProvider(BaseProvider):
             elif response.status_code == 422:
                 error_data = response.json()
                 raise ValidationError(f"Invalid request: {error_data.get('error', {})}")
+            elif response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                raise RateLimitError(
+                    "Hetzner API rate limit exceeded",
+                    retry_after=int(retry_after) if retry_after else None,
+                )
             elif response.status_code >= 400:
                 raise ProviderError(f"Failed to create server: {response.status_code}")
 
@@ -155,6 +161,12 @@ class HetznerProvider(BaseProvider):
                 raise NotFoundError(f"Server {vps_id} not found")
             elif response.status_code == 401:
                 raise AuthenticationError("Invalid Hetzner API key")
+            elif response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                raise RateLimitError(
+                    "Hetzner API rate limit exceeded",
+                    retry_after=int(retry_after) if retry_after else None,
+                )
             elif response.status_code >= 400:
                 raise ProviderError(f"Failed to get server: {response.status_code}")
 
@@ -187,6 +199,12 @@ class HetznerProvider(BaseProvider):
                 raise NotFoundError(f"Server {vps_id} not found")
             elif response.status_code == 401:
                 raise AuthenticationError("Invalid Hetzner API key")
+            elif response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                raise RateLimitError(
+                    "Hetzner API rate limit exceeded",
+                    retry_after=int(retry_after) if retry_after else None,
+                )
             elif response.status_code >= 400:
                 raise ProviderError(f"Failed to delete server: {response.status_code}")
 

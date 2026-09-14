@@ -474,3 +474,70 @@ class EventRepository:
             created_at=entity.created_at,
             redacted=entity.redacted,
         )
+
+
+class UnitOfWork:
+    """Unit of Work pattern for managing database transactions.
+    
+    This class provides a context manager for atomic database operations,
+    ensuring that all repositories share the same session and transaction.
+    """
+    
+    def __init__(self, session_factory):
+        """Initialize Unit of Work.
+        
+        Args:
+            session_factory: Async session factory from SQLAlchemy.
+        """
+        self.session_factory = session_factory
+        self._session = None
+        self._nodes = None
+        self._jobs = None
+        self._events = None
+    
+    async def __aenter__(self):
+        """Enter context manager - start transaction."""
+        self._session = await self.session_factory()
+        self._nodes = NodeRepository(self._session)
+        self._jobs = ReplacementJobRepository(self._session)
+        self._events = EventRepository(self._session)
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit context manager - commit or rollback."""
+        try:
+            if exc_type is not None:
+                await self.rollback()
+            else:
+                await self.commit()
+        finally:
+            await self._session.close()
+    
+    @property
+    def nodes(self) -> NodeRepository:
+        """Get node repository."""
+        if self._nodes is None:
+            raise RuntimeError("Unit of Work not initialized. Use 'async with' context.")
+        return self._nodes
+    
+    @property
+    def jobs(self) -> ReplacementJobRepository:
+        """Get replacement job repository."""
+        if self._jobs is None:
+            raise RuntimeError("Unit of Work not initialized. Use 'async with' context.")
+        return self._jobs
+    
+    @property
+    def events(self) -> EventRepository:
+        """Get event repository."""
+        if self._events is None:
+            raise RuntimeError("Unit of Work not initialized. Use 'async with' context.")
+        return self._events
+    
+    async def commit(self) -> None:
+        """Commit the current transaction."""
+        await self._session.commit()
+    
+    async def rollback(self) -> None:
+        """Rollback the current transaction."""
+        await self._session.rollback()
