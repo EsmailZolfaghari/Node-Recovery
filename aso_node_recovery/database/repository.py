@@ -241,6 +241,28 @@ class ReplacementJobRepository:
         models = result.scalars().all()
         return [self._to_entity(m) for m in models]
 
+    async def get_active_jobs_for_node(self, node_id: int) -> list[ReplacementJob]:
+        """Get active replacement jobs for a node."""
+        result = await self.session.execute(
+            select(ReplacementJobModel)
+            .where(
+                ReplacementJobModel.node_id == node_id,
+                ReplacementJobModel.status.in_(["pending", "running"]),
+            )
+            .order_by(ReplacementJobModel.created_at.desc())
+        )
+        models = result.scalars().all()
+        return [self._to_entity(m) for m in models]
+
+    async def count_active_jobs(self) -> int:
+        """Count total active replacement jobs."""
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(ReplacementJobModel)
+            .where(ReplacementJobModel.status.in_(["pending", "running"]))
+        )
+        return result.scalar() or 0
+
     async def create(self, job: ReplacementJob) -> ReplacementJob:
         """Create a new job."""
         model = self._to_model(job)

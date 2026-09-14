@@ -110,11 +110,26 @@ class ReplacementSettings(BaseSettings):
         ge=120,
         description="Timeout for 3X-UI deployment",
     )
-    max_concurrent_replacements: int = Field(
+    max_concurrent: int = Field(
         default=3,
         ge=1,
         le=10,
         description="Maximum concurrent replacement jobs",
+    )
+
+
+class FailureConfirmationSettings(BaseSettings):
+    """Failure confirmation settings."""
+
+    checks: int = Field(
+        default=3,
+        ge=1,
+        description="Number of health checks to confirm failure",
+    )
+    interval_seconds: int = Field(
+        default=30,
+        ge=5,
+        description="Interval between confirmation checks",
     )
 
 
@@ -215,6 +230,11 @@ class Settings(BaseSettings):
 
     # Replacement settings
     replacement: ReplacementSettings = Field(default_factory=ReplacementSettings)
+
+    # Failure confirmation settings
+    failure_confirmation: FailureConfirmationSettings = Field(
+        default_factory=FailureConfirmationSettings
+    )
 
     # Telegram settings
     telegram: TelegramSettings = Field(default_factory=TelegramSettings)

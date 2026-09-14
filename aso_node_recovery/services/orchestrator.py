@@ -85,7 +85,7 @@ class ReplacementOrchestrator:
                 logger.error("Node not found", node_id=node_id)
                 return None
 
-            if not node.can_be_replaced():
+            if not node.can_be_replaced:
                 logger.warning(
                     "Node cannot be replaced",
                     node_id=node_id,
@@ -106,16 +106,16 @@ class ReplacementOrchestrator:
 
             # Check concurrency limits
             active_jobs_count = await self.uow.jobs.count_active_jobs()
-            if active_jobs_count >= settings.replacement_max_concurrent:
+            if active_jobs_count >= settings.replacement.max_concurrent:
                 logger.warning(
                     "Max concurrent replacements reached",
                     active_count=active_jobs_count,
-                    max_allowed=settings.replacement_max_concurrent,
+                    max_allowed=settings.replacement.max_concurrent,
                 )
                 return None
 
             # Mark node as having replacement in progress
-            node.replacement_in_progress = True
+            node.mark_replacing(job_id=None)  # Will be set after job creation
             node.status = NodeStatus.REPLACING
             await self.uow.nodes.update(node)
 
@@ -125,20 +125,25 @@ class ReplacementOrchestrator:
                 node_name=node.name,
                 old_vps_id=node.vps_id,
                 old_vps_ip=node.ip_address,
-                max_attempts=settings.replacement_max_attempts,
-                max_ip_check_attempts=settings.reachability_max_attempts,
+                max_attempts=settings.replacement.max_attempts,
+                max_ip_check_attempts=settings.reachability_max_attempts if hasattr(settings, 'reachability_max_attempts') else settings.replacement.ip_check_max_retries,
             )
 
             created_job = await self.uow.jobs.create(job)
 
+            # Now update node with actual job ID
+            node.mark_replacing(job_id=created_job.id)
+            await self.uow.nodes.update(node)
+
             # Log event
             await self.uow.events.create(
                 Event(
-                    entity_type="replacement_job",
-                    entity_id=created_job.id,
-                    event_type=EventType.JOB_CREATED,
+                    event_type=EventType.REPLACEMENT_JOB_CREATED,
                     message=f"Replacement job created: {reason}",
-                    metadata={"node_id": node_id, "reason": reason},
+                    node_id=node_id,
+                    node_name=node.name,
+                    replacement_job_id=created_job.id,
+                    details={"node_id": node_id, "reason": reason},
                 )
             )
 
@@ -315,7 +320,7 @@ class ReplacementOrchestrator:
                 return False
 
         # Perform multiple health checks to confirm persistent failure
-        check_count = settings.failure_confirmation_checks
+        check_count = settings.failure_confirmation.checks
         failed_checks = 0
 
         for i in range(check_count):
@@ -338,7 +343,7 @@ class ReplacementOrchestrator:
                 )
 
             if i < check_count - 1:
-                await asyncio.sleep(settings.failure_confirmation_interval_seconds)
+                await asyncio.sleep(settings.failure_confirmation.interval_seconds)
 
         if failed_checks >= check_count:
             logger.info("Failure confirmed as persistent", job_id=job.id)
@@ -405,7 +410,7 @@ class ReplacementOrchestrator:
             # Wait for VPS to become active
             vps_info = await self.provider.wait_for_active(
                 vps_info.id,
-                timeout_seconds=settings.vps_activation_timeout_seconds,
+                timeout_seconds=settings.replacement.ssh_ready_timeout_seconds,
             )
 
             job.new_vps_id = vps_info.id

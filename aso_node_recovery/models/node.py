@@ -99,3 +99,42 @@ class Node:
         return self.status in (NodeStatus.FAILED, NodeStatus.UNHEALTHY) and (
             self.active_replacement_job_id is None
         )
+
+    @property
+    def can_be_replaced(self) -> bool:
+        """Check if node can be replaced (property alias)."""
+        return self.is_replaceable()
+
+    @property
+    def vps_id(self) -> str | None:
+        """Get current VPS ID (alias for current_vps_id)."""
+        return self.current_vps_id
+
+    @property
+    def ip_address(self) -> str | None:
+        """Get current IP address (alias for current_ip)."""
+        return self.current_ip
+
+    @property
+    def replacement_in_progress(self) -> bool:
+        """Check if replacement is in progress."""
+        return self.active_replacement_job_id is not None
+
+    @replacement_in_progress.setter
+    def replacement_in_progress(self, value: bool) -> None:
+        """Set replacement in progress flag.
+        
+        Note: This setter only clears the flag. To set it to True,
+        use mark_replacing(job_id) method instead, since we need
+        the actual job_id.
+        """
+        if not value:
+            self.active_replacement_job_id = None
+        # Setting to True requires a job_id, use mark_replacing() instead
+
+    @property
+    def master_node_id(self) -> str | None:
+        """Get master node ID from metadata."""
+        if self.metadata and "master_node_id" in self.metadata:
+            return self.metadata.get("master_node_id")
+        return self.name  # Fallback to node name

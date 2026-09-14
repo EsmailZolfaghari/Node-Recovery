@@ -49,9 +49,11 @@ class ReplacementJob:
     replacement workflow from failure detection to old VPS cleanup.
     """
 
-    id: int
     node_id: int
     node_name: str
+
+    # ID is optional - will be set by database after creation
+    id: int | None = None
 
     # Stage tracking
     current_stage: ReplacementStage = ReplacementStage.PENDING
