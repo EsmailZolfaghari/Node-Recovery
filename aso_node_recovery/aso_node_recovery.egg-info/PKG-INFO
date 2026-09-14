@@ -76,6 +76,18 @@ ASO Node Recovery is a production-grade system that automatically detects failed
        └────────────┘  └────────────┘  └────────────┘
 ```
 
+## Table of Contents
+
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Docker Deployment](#docker-deployment)
+- [Safety Features](#safety-features)
+- [Failure Scenarios](#failure-scenarios)
+- [Development](#development)
+- [Project Structure](#project-structure)
+- [Troubleshooting](#troubleshooting)
+
 ## Installation
 
 ### Requirements
@@ -112,14 +124,45 @@ cp .env.example .env
 
 See `.env.example` for all available configuration options.
 
-Key settings:
+### Required Settings
 
-- `HETZNER_API_TOKEN`: Hetzner Cloud API token
-- `LINODE_API_TOKEN`: Linode API token
-- `MASTER_HOST`: 3X-UI Master server hostname
-- `MASTER_PASSWORD`: Master password
-- `TELEGRAM_BOT_TOKEN`: Telegram bot token
-- `DRY_RUN_ENABLED`: Enable dry run mode
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `HETZNER_API_TOKEN` | Hetzner Cloud API token | `hcloud_xxx` |
+| `LINODE_API_TOKEN` | Linode API token | `linode_xxx` |
+| `MASTER_HOST` | 3X-UI Master server hostname | `master.example.com` |
+| `MASTER_PASSWORD` | Master password | `your_password` |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token | `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11` |
+
+### Optional Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DRY_RUN_ENABLED` | `false` | Enable dry run mode (no real actions) |
+| `DEBUG` | `false` | Enable debug logging |
+| `MASTER_PORT` | `54321` | Master server port |
+| `SSH_USERNAME` | `root` | SSH username for VPS |
+| `SSH_KEY_FILE` | `` | Path to SSH private key |
+| `DATABASE_PATH` | `data/aso_recovery.db` | SQLite database path |
+| `LOGGING_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
+
+### Failure Detection Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PING_INTERVAL_SECONDS` | `60` | How often to ping nodes |
+| `CONSECUTIVE_FAILURES_THRESHOLD` | `3` | Failures before marking as failed |
+| `FAILURE_CONFIRMATION_RETRIES` | `2` | Retries to confirm failure |
+
+### Replacement Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_ATTEMPTS` | `5` | Max replacement attempts per job |
+| `IP_CHECK_MAX_RETRIES` | `3` | Max IP reachability check retries |
+| `SSH_READY_TIMEOUT_SECONDS` | `300` | Timeout for SSH to be ready |
+| `DEPLOYMENT_TIMEOUT_SECONDS` | `600` | Timeout for 3X-UI deployment |
+| `MAX_CONCURRENT_REPLACEMENTS` | `3` | Max simultaneous replacements |
 
 ## Usage
 
@@ -134,32 +177,111 @@ aso-recovery --dry-run
 
 # Debug mode
 aso-recovery --debug
+
+# With custom config file
+aso-recovery --config /path/to/.env
 ```
 
 ### Telegram Bot Commands
 
-- `/status` - Overall system status
-- `/nodes` - List all nodes
-- `/node <name>` - Node details
-- `/jobs` - Active replacement jobs
-- `/replace <node>` - Manual replacement
-- `/history` - Recent events
-- `/help` - Help message
+| Command | Description |
+|---------|-------------|
+| `/status` | Overall system status |
+| `/nodes` | List all nodes |
+| `/node <name>` | Node details |
+| `/jobs` | Active replacement jobs |
+| `/replace <node>` | Start manual replacement |
+| `/cancel <job_id>` | Cancel a replacement job |
+| `/history` | Recent events |
+| `/help` | Help message |
+
+### Manual Operations
+
+```bash
+# Start replacement for a specific node
+aso-recovery replace Germany-01
+
+# Check status of all jobs
+aso-recovery jobs
+
+# View event history
+aso-recovery history --limit 50
+```
+
+## Docker Deployment
+
+### Using Docker Compose (Recommended)
+
+1. Create `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  aso-recovery:
+    build: .
+    container_name: aso-recovery
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ~/.ssh/id_ed25519:/app/ssh_key:ro
+    environment:
+      - SSH_KEY_FILE=/app/ssh_key
+    networks:
+      - aso-network
+
+networks:
+  aso-network:
+    driver: bridge
+```
+
+2. Build and run:
+
+```bash
+docker compose up -d
+```
+
+3. View logs:
+
+```bash
+docker compose logs -f aso-recovery
+```
+
+### Building Docker Image Manually
+
+```bash
+# Build image
+docker build -t aso-node-recovery:latest .
+
+# Run container
+docker run -d \
+  --name aso-recovery \
+  --restart unless-stopped \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  -v ~/.ssh/id_ed25519:/app/ssh_key:ro \
+  --env-file .env \
+  -e SSH_KEY_FILE=/app/ssh_key \
+  aso-node-recovery:latest
+```
 
 ## Safety Features
 
 ### Old VPS Protection
 
-The most critical safety rule: **Old VPS is never deleted until the new node is fully operational and verified.**
+**The most critical safety rule:** Old VPS is never deleted until the new node is fully operational and verified.
 
 Replacement workflow:
-1. Create new VPS
-2. Validate IP reachability
-3. Deploy 3X-UI
-4. Verify deployment
-5. Update Master
-6. Verify Master sync
-7. Final health check
+1. ✅ Create new VPS
+2. ✅ Validate IP reachability
+3. ✅ Deploy 3X-UI
+4. ✅ Verify deployment
+5. ✅ Update Master
+6. ✅ Verify Master sync
+7. ✅ Final health check
 8. **Only then**: Delete old VPS
 
 If any step fails, the old VPS remains untouched.
@@ -181,6 +303,110 @@ All operations are idempotent. Retries due to:
 
 Will not cause duplicate resources or inconsistent state.
 
+### Cost Protection
+
+- Maximum attempts per job: 5 (configurable)
+- Maximum concurrent replacements: 3 (configurable)
+- Automatic cleanup of orphaned VPS
+- Dry run mode for testing
+
+## Failure Scenarios
+
+### Scenario 1: Temporary Network Issue
+
+**Symptom:** Node unreachable for a few minutes
+
+**Behavior:** System waits and retries. No replacement triggered if node recovers within threshold.
+
+### Scenario 2: Persistent Node Failure
+
+**Symptom:** Node unreachable for extended period
+
+**Behavior:** 
+1. Failure confirmed after multiple checks
+2. Replacement job created
+3. New VPS provisioned
+4. Old VPS preserved until new node verified
+
+### Scenario 3: Bad IP on New VPS
+
+**Symptom:** New VPS IP not reachable from required countries
+
+**Behavior:**
+1. IP validation fails
+2. Temporary VPS destroyed
+3. New VPS created with different IP
+4. Retry up to MAX_ATTEMPTS
+
+### Scenario 4: SSH Not Ready
+
+**Symptom:** VPS created but SSH not accepting connections
+
+**Behavior:**
+1. Wait for SSH with timeout (default: 300s)
+2. Retry connection periodically
+3. Fail if timeout exceeded
+4. Old VPS preserved
+
+### Scenario 5: 3X-UI Installation Fails
+
+**Symptom:** Installation script errors or times out
+
+**Behavior:**
+1. Mark deployment as failed
+2. Increment attempt counter
+3. Retry with new VPS if attempts remain
+4. Old VPS preserved
+
+### Scenario 6: Master API Unavailable
+
+**Symptom:** Cannot update master with new node info
+
+**Behavior:**
+1. Retry master update
+2. Keep new VPS running
+3. Old VPS preserved
+4. Resume from last stage on recovery
+
+### Scenario 7: Application Crash During Replacement
+
+**Symptom:** Process terminates mid-operation
+
+**Behavior:**
+1. On restart, read state from database
+2. Detect incomplete operations
+3. Continue from last known good stage
+4. Clean up any orphaned resources
+
+### Scenario 8: Concurrent Replacement Attempts
+
+**Symptom:** Multiple workers detect same failed node
+
+**Behavior:**
+1. Database locking prevents duplicate jobs
+2. First worker creates job
+3. Other workers detect existing job
+4. Single replacement proceeds
+
+### Scenario 9: Cleanup Failure
+
+**Symptom:** Cannot delete old VPS after successful replacement
+
+**Behavior:**
+1. Log error and alert via Telegram
+2. Mark old VPS for later cleanup
+3. Background task retries cleanup
+4. Manual intervention possible via Telegram
+
+### Scenario 10: Duplicate Telegram Commands
+
+**Symptom:** User sends same command multiple times
+
+**Behavior:**
+1. Command deduplication
+2. Only one job created per request
+3. Subsequent commands show existing status
+
 ## Development
 
 ### Running Tests
@@ -194,6 +420,12 @@ pytest --cov=aso_node_recovery
 
 # Specific test file
 pytest tests/unit/test_models.py
+
+# Integration tests
+pytest tests/integration/
+
+# E2E tests (requires mock services)
+pytest tests/e2e/
 ```
 
 ### Code Quality
@@ -202,9 +434,35 @@ pytest tests/unit/test_models.py
 # Linting
 ruff check .
 
+# Format code
+ruff format .
+
 # Type checking
 mypy aso_node_recovery
 ```
+
+### Adding a New Provider
+
+1. Create new provider class in `providers/`:
+
+```python
+from aso_node_recovery.providers.base import BaseVPSProvider
+
+class MyProvider(BaseVPSProvider):
+    async def create_vps(self, ...) -> VPSInfo:
+        pass
+    
+    async def delete_vps(self, vps_id: str) -> None:
+        pass
+    
+    # Implement other required methods
+```
+
+2. Register provider in `providers/__init__.py`
+
+3. Add configuration settings in `config/settings.py`
+
+4. Update documentation
 
 ## Project Structure
 
@@ -215,14 +473,69 @@ aso_node_recovery/
 ├── database/        # Database models and repositories
 ├── models/          # Domain models
 ├── providers/       # VPS provider abstractions
+│   ├── base.py      # Base provider interface
+│   ├── hetzner.py   # Hetzner implementation
+│   └── linode.py    # Linode implementation
 ├── reachability/    # IP reachability checkers
+│   ├── base.py      # Base checker interface
+│   └── check_host.py # Check-Host implementation
 ├── deployer/        # 3X-UI deployment
+│   └── ssh.py       # SSH-based deployment
 ├── master/          # 3X-UI Master integration
+│   └── client.py    # Master API client
 ├── telegram/        # Telegram bot
+│   └── bot.py       # Bot implementation
 ├── services/        # Business logic services
+│   ├── health_monitor.py    # Node health monitoring
+│   └── orchestrator.py      # Replacement orchestration
 ├── api/             # External APIs
-└── tests/           # Test suites
+├── tests/           # Test suites
+│   ├── unit/        # Unit tests
+│   ├── integration/ # Integration tests
+│   └── e2e/         # End-to-end tests
+├── main.py          # Application entry point
+├── pyproject.toml   # Project configuration
+└── README.md        # This file
 ```
+
+## Troubleshooting
+
+### Common Issues
+
+#### "No module named 'aso_node_recovery'"
+
+```bash
+pip install -e .
+```
+
+#### "Database locked"
+
+Ensure no other process is using the database. Restart the application.
+
+#### "SSH connection refused"
+
+1. Verify SSH key permissions: `chmod 600 ~/.ssh/id_ed25519`
+2. Check SSH username in config
+3. Ensure VPS firewall allows SSH
+
+#### "Master API connection failed"
+
+1. Verify MASTER_HOST and MASTER_PASSWORD
+2. Check network connectivity to master
+3. Ensure master is running and accessible
+
+#### "Telegram bot not responding"
+
+1. Verify TELEGRAM_BOT_TOKEN
+2. Check TELEGRAM_ADMIN_USER_IDS
+3. Ensure bot is not rate-limited
+
+### Getting Help
+
+1. Check logs: `docker compose logs aso-recovery` or view log file
+2. Review event history: `/history` in Telegram
+3. Enable debug mode for detailed logging
+4. Open an issue on the repository
 
 ## License
 

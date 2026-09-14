@@ -5,25 +5,25 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-*.so
-
-# Dependencies
-.venv/
-venv/
 env/
-ENV/
+venv/
+.venv/
+.eggs/
+.egg-info/
 
 # Logs
 *.log
 
-# Environment variables
+# Environment
 .env
 .env.local
-*.env.*
+.env.*
 
-# Coverage reports
-.coverage
-htmlcov/
-.coverage.*
-.coverage.xml
+# Docker
+Dockerfile
+docker-compose.yml
+
+# Backup and script files
+*.bak
+*.backup
 ```
