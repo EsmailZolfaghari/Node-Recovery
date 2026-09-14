@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  aso-recovery:
+    build: .
+    container_name: aso-recovery
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ~/.ssh/id_ed25519:/app/ssh_key:ro
+    environment:
+      - SSH_KEY_FILE=/app/ssh_key
+    networks:
+      - aso-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import aso_node_recovery; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  aso-network:
+    driver: bridge
