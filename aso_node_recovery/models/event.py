@@ -1,9 +1,14 @@
 """Event model for audit and history tracking."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+
+def _now() -> datetime:
+    """Get current UTC time using timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class EventType(Enum):
@@ -81,7 +86,7 @@ class Event:
     level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
     # Timing
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_now)
 
     # IMPORTANT: This field should NEVER contain secrets
     # All sensitive data must be redacted before storing
@@ -118,7 +123,7 @@ class Event:
             level=data.get("level", "INFO"),
             created_at=datetime.fromisoformat(data["created_at"])
             if "created_at" in data and isinstance(data["created_at"], str)
-            else data.get("created_at", datetime.utcnow()),
+            else _now(),
             redacted=data.get("redacted", False),
         )
 

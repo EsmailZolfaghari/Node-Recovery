@@ -2,7 +2,7 @@
 
 import json
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Generic, TypeVar
 
 from sqlalchemy import select, update, delete, func
@@ -14,6 +14,11 @@ from aso_node_recovery.models.replacement import ReplacementJob, ReplacementStag
 from aso_node_recovery.models.event import Event, EventType
 
 T = TypeVar("T")
+
+
+def _now() -> datetime:
+    """Get current UTC time using timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class Repository(ABC, Generic[T]):
@@ -123,7 +128,7 @@ class NodeRepository:
                 active_replacement_job_id=node.active_replacement_job_id,
                 replacement_history=json.dumps(node.replacement_history),
                 metadata_json=node.metadata,
-                updated_at=datetime.utcnow(),
+                updated_at=_now(),
             )
         )
         await self.session.flush()
@@ -269,7 +274,7 @@ class ReplacementJobRepository:
                 old_vps_deleted=job.old_vps_deleted,
                 master_updated=job.master_updated,
                 deployment_verified=job.deployment_verified,
-                updated_at=datetime.utcnow(),
+                updated_at=_now(),
             )
         )
         await self.session.flush()
