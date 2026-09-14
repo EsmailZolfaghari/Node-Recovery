@@ -1,9 +1,14 @@
 """Replacement job model and stage definitions."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+
+def _now() -> datetime:
+    """Get current UTC time using timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class ReplacementStage(Enum):
@@ -73,10 +78,10 @@ class ReplacementJob:
     stage_progress: dict[str, Any] = field(default_factory=dict)
 
     # Timing
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_now)
     started_at: datetime | None = None
     completed_at: datetime | None = None
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=_now)
 
     # Flags
     old_vps_deleted: bool = False
@@ -87,20 +92,20 @@ class ReplacementJob:
         """Start the replacement job."""
         self.status = ReplacementStatus.RUNNING
         self.current_stage = ReplacementStage.CONFIRMING_FAILURE
-        self.started_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.started_at = _now()
+        self.updated_at = _now()
 
     def advance_stage(self, stage: ReplacementStage) -> None:
         """Advance to the next stage."""
         self.current_stage = stage
-        self.updated_at = datetime.utcnow()
+        self.updated_at = _now()
 
     def mark_completed(self) -> None:
         """Mark job as completed."""
         self.status = ReplacementStatus.COMPLETED
         self.current_stage = ReplacementStage.COMPLETED
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = _now()
+        self.updated_at = _now()
 
     def mark_failed(self, error_message: str, error_details: dict[str, Any] | None = None) -> None:
         """Mark job as failed."""
@@ -109,15 +114,15 @@ class ReplacementJob:
         self.error_message = error_message
         if error_details:
             self.error_details = error_details
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = _now()
+        self.updated_at = _now()
 
     def mark_cancelled(self) -> None:
         """Mark job as cancelled."""
         self.status = ReplacementStatus.CANCELLED
         self.current_stage = ReplacementStage.CANCELLED
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = _now()
+        self.updated_at = _now()
 
     def can_retry(self) -> bool:
         """Check if job can be retried."""
@@ -127,7 +132,7 @@ class ReplacementJob:
         """Increment attempt counter."""
         self.attempt_number += 1
         self.retry_count += 1
-        self.updated_at = datetime.utcnow()
+        self.updated_at = _now()
 
     def should_delete_old_vps(self) -> bool:
         """Check if old VPS should be deleted.

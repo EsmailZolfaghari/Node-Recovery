@@ -6,7 +6,7 @@ reachability checks, deployment, and master updates.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -26,6 +26,11 @@ from aso_node_recovery.providers.base import BaseProvider, ProviderError
 from aso_node_recovery.reachability.base import BaseReachabilityChecker
 
 logger = structlog.get_logger(__name__)
+
+
+def _now() -> datetime:
+    """Get current UTC time using timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class ReplacementOrchestrator:
@@ -207,7 +212,7 @@ class ReplacementOrchestrator:
                             node.ip_address = job.new_vps_ip
                             node.vps_id = job.new_vps_id
                             node.replacement_in_progress = False
-                            node.last_health_check = datetime.utcnow()
+                            node.last_health_check = _now()
                             await self.uow.nodes.update(node)
 
                         await self.uow.events.create(
