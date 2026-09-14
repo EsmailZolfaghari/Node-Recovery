@@ -66,10 +66,14 @@ class NodeModel(Base):
 
     # Relationships
     replacement_jobs: Mapped[list["ReplacementJobModel"]] = relationship(
-        "ReplacementJobModel", back_populates="node"
+        "ReplacementJobModel",
+        back_populates="node",
+        foreign_keys="ReplacementJobModel.node_id"
     )
     events: Mapped[list["EventModel"]] = relationship(
-        "EventModel", back_populates="node"
+        "EventModel",
+        back_populates="node",
+        foreign_keys="EventModel.node_id"
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -153,9 +157,15 @@ class ReplacementJobModel(Base):
     deployment_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
-    node: Mapped["NodeModel"] = relationship("NodeModel", back_populates="replacement_jobs")
+    node: Mapped["NodeModel"] = relationship(
+        "NodeModel",
+        back_populates="replacement_jobs",
+        foreign_keys=[node_id]
+    )
     events: Mapped[list["EventModel"]] = relationship(
-        "EventModel", back_populates="replacement_job"
+        "EventModel",
+        back_populates="replacement_job",
+        foreign_keys="EventModel.replacement_job_id"
     )
 
     def to_dict(self) -> dict[str, Any]:
